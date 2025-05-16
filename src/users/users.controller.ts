@@ -23,9 +23,10 @@ import { UsersService } from './users.service';
 import { AnyARecord } from 'dns';
 import { AssignAcademyRoleDto } from './dto/assign-academy-role.dto';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { AcademyRole, SystemRole } from './dto/register.dto';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserDocument } from './schemas/user.schema';
+import { SystemRole } from 'src/auth/enum/systemRole.enum';
+import { AcademyRole } from 'src/auth/enum/academyRole.enum';
 
 @ApiTags('Users', 'Profile')
 @Controller('users')

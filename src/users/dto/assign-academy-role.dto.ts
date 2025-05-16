@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsEnum } from 'class-validator';
-import { AcademyRole } from './register.dto'; // O donde tengas el enum AcademyRole
+import { AcademyRole } from 'src/auth/enum/academyRole.enum';
 
 export class AssignAcademyRoleDto {
   @ApiProperty({

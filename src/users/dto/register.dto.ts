@@ -5,20 +5,9 @@ import {
   MinLength,
   IsOptional,
   IsArray,
-  ArrayMinSize,
   IsEnum,
 } from 'class-validator';
-
-// Podrías definir tus roles como un Enum
-export enum SystemRole {
-  ROOT = 'ROOT',
-  USER = 'USER',
-}
-export enum AcademyRole {
-  DIRECTOR = 'DIRECTOR',
-  PROFESOR = 'PROFESOR',
-  ALUMNO = 'ALUMNO',
-}
+import { SystemRole } from 'src/auth/enum/systemRole.enum';
 
 export class RegisterDto {
   @IsNotEmpty()
