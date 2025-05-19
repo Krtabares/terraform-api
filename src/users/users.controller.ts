@@ -35,7 +35,7 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Patch('me/profile') // Ruta para que el usuario actualice su propio perfil
-  @ApiBearerAuth()
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Actualizar perfil del usuario autenticado' })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({
@@ -58,7 +58,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard) // RolesGuard necesitará manejar la lógica de permisos
   @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR) // Solo ROOT o un DIRECTOR (de esa academia) pueden asignar roles
   @Post(':userId/assign-academy-role')
-  @ApiBearerAuth()
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Admin/Director] Asignar un rol de academia a un usuario',
   })

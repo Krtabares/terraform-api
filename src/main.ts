@@ -38,7 +38,7 @@ async function bootstrap() {
       },
       'access-token',
     ) // importante si usas JWT
-    .addServer('/api')
+    // .addServer('/api')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -38,7 +38,7 @@ export class AcademiesController {
   constructor(private readonly academiesService: AcademiesService) {}
 
   @Post()
-  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR) // Solo Admin o Director pueden crear
+  @Roles(SystemRole.ROOT, SystemRole.SYSMANAGER) // Solo Admin o Director pueden crear
   @ApiOperation({
     summary: 'Crear una nueva academia (Requiere Rol: Admin o Director)',
   })
@@ -55,8 +55,7 @@ export class AcademiesController {
     return this.academiesService.create(createAcademyDto);
   }
 
-  @Get()
-  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR, SystemRole.USER) // Todos los roles autenticados pueden ver
+  @Get() // Todos los roles autenticados pueden ver
   @ApiOperation({
     summary:
       'Obtener todas las academias (Requiere Rol: Admin, Director o User)',
@@ -71,8 +70,7 @@ export class AcademiesController {
     return this.academiesService.findAll();
   }
 
-  @Get(':id')
-  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR, SystemRole.USER) // Todos los roles autenticados pueden ver
+  @Get(':id')// Todos los roles autenticados pueden ver
   @ApiOperation({
     summary:
       'Obtener una academia por su ID (Requiere Rol: Admin, Director o User)',
@@ -101,14 +99,14 @@ export class AcademiesController {
     return academy;
   }
 
-  @Patch(':id')
+  @Patch(':academyId')
   @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR) // Solo Admin o Director pueden actualizar
   @ApiOperation({
     summary:
       'Actualizar una academia existente (Requiere Rol: Admin o Director)',
   })
   @ApiParam({
-    name: 'id',
+    name: 'academyId',
     description: 'ID único de la academia',
     type: String,
   })
@@ -122,7 +120,7 @@ export class AcademiesController {
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   @ApiResponse({ status: 403, description: 'Prohibido (Rol no permitido).' })
   async update(
-    @Param('id' /*, ParseMongoIdPipe */) id: string,
+    @Param('academyId' /*, ParseMongoIdPipe */) id: string,
     @Body() updateAcademyDto: UpdateAcademyDto,
   ) {
     const updatedAcademy = await this.academiesService.update(

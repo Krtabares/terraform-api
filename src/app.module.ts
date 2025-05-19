@@ -11,6 +11,11 @@ import { SharedModule } from './shared/shared.module';
 import { UsersModule } from './users/users.module';
 import { MailModule } from './mail/mail.module';
 import { join } from 'path'; 
+import { ClassesModule } from './classes/classes.module';
+import { ReservationRequestsModule } from './reservation-requests/reservation-requests.module';
+import { InscriptionsModule } from './inscriptions/inscriptions.module';
+import { PaymentsModule } from './payments/payments.module';
+import { PersonAcademyMembershipsModule } from './person-academy-memberships/person-academy-memberships.module';
 
 @Module({
   imports: [
@@ -19,7 +24,7 @@ import { join } from 'path';
     MailerModule.forRootAsync({
       imports: [ConfigModule], // Importar ConfigModule para usar ConfigService
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService) => ({
         transport: {
           host: configService.get<string>('MAIL_HOST', 'smtp.example.com'),
           port: configService.get<number>('MAIL_PORT', 587),
@@ -48,12 +53,17 @@ import { join } from 'path';
       }),
     }),
     AuthModule,
-    PersonsModule,
     AcademiesModule,
+    PersonsModule,
+    PersonAcademyMembershipsModule,
     BackofficeModule,
     SharedModule,
     UsersModule,
     MailModule,
+    ClassesModule,
+    ReservationRequestsModule,
+    InscriptionsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

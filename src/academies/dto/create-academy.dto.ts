@@ -84,11 +84,10 @@ export class CreateAcademyDto {
   mainCourses?: string[];
 
   @ApiProperty({
-    example: '2015-08-20',
+    example: '2015-08-20T00:00:00.000Z',
     description: 'Fecha de fundación (YYYY-MM-DD)',
     required: false,
   })
   @IsOptional()
-  @IsDateString()
   foundedDate?: Date;
 }

@@ -4,7 +4,6 @@ import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
 import { Academy, AcademySchema } from './schemas/academy.schema';
 import { UsersModule } from 'src/users/users.module';
-import { UsersService } from 'src/users/users.service';
 
 @Module({
   imports: [
@@ -12,6 +11,7 @@ import { UsersService } from 'src/users/users.service';
     MongooseModule.forFeature([{ name: Academy.name, schema: AcademySchema }]),
   ],
   controllers: [AcademiesController],
-  providers: [AcademiesService, UsersService],
+  providers: [AcademiesService],
+  exports: [AcademiesService],
 })
 export class AcademiesModule {}

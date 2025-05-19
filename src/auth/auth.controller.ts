@@ -30,6 +30,8 @@ import {
 import { ChangePasswordDto } from 'src/users/dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SystemRole } from './enum/systemRole.enum';
+import { AcademyRole } from './enum/academyRole.enum';
 
 // DTO para la respuesta del login
 class LoginResponseDto {
@@ -162,7 +164,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  @ApiBearerAuth()
+  @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cambiar la contraseña del usuario autenticado' })
   @ApiBody({ type: ChangePasswordDto })
@@ -258,9 +260,9 @@ export class AuthController {
   // Ejemplo de ruta protegida por rol DIRECTOR en una academia específica
   @Get('academy/:academyId/director-test')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('DIRECTOR')
+  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR)
   @ApiBearerAuth('access-token')
-  @ApiTags('Admin', 'Academy') // <--- Múltiples tags
+  @ApiTags('Admin', 'Academies') // <--- Múltiples tags
   @ApiOperation({
     summary: '[DIRECTOR] Endpoint de prueba para rol DIRECTOR en una academia',
     description:
