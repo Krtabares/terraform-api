@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, FilterQuery, SortOrder } from 'mongoose';
-import { Person, PersonDocument } from './schemas/person.schema';
+import { Person, PersonDocument, PersonStatus } from './schemas/person.schema';
 import { CreatePersonDto } from './dto/create-person.dto';
 import { UpdatePersonDto } from './dto/update-person.dto';
 import { QueryPersonDto } from './dto/query-person.dto';
@@ -200,6 +200,28 @@ export class PersonsService {
     return person;
   }
 
+  // Helper para crear un objeto Person "vacío"
+  createEmptyPerson(): Omit<Person, '_id' | 'createdAt' | 'updatedAt'> & {
+    _id?: Types.ObjectId;
+  } {
+    return {
+      // _id: undefined, // _id no debería estar si es "nuevo" o "vacío"
+      firstName: '',
+      lastName: '',
+      email: undefined, // o '' si prefieres
+      phone: undefined,
+      dateOfBirth: undefined,
+      gender: undefined, // o un valor por defecto si tiene sentido
+      address: undefined,
+      internalNotes: undefined,
+      userId: null,
+      status: PersonStatus.PROSPECT, // O un estado por defecto para "no encontrado" / "nuevo"
+      tags: [],
+      customFields: {},
+      // createdAt y updatedAt no se incluyen ya que no es un registro real
+    };
+  }
+
   async findByUserId(userId: string): Promise<PersonDocument | null> {
     // Devolver PersonDocument
     if (!Types.ObjectId.isValid(userId)) return null;
@@ -208,15 +230,58 @@ export class PersonsService {
       .exec();
   }
 
-  async update(
-    id: string,
-    updatePersonDto: UpdatePersonDto,
-    requestingAcademyId?: string,
-  ): Promise<PersonDocument> {
-    // Devolver PersonDocument
-    // findOne validará si la persona existe y si el usuario tiene acceso (si requestingAcademyId se pasa)
-    const personToUpdate = await this.findOne(id, requestingAcademyId);
+  async findByUserIdOrPersonId(id: string): Promise<PersonDocument | Person> {
+    if (!Types.ObjectId.isValid(id)) {
+      // Devolver un objeto Person vacío si el ID es inválido y así lo deseas
+      return this.createEmptyPerson() as Person; // Castear a Person, ya que no es un Document
+    }
 
+    const findForUser = await this.findByUserId(id);
+    if (findForUser) {
+      return findForUser; // Esto es PersonDocument
+    }
+
+    const findByPerson = await this.personModel
+      .findById(id)
+      .populate('userId', 'email')
+      .exec();
+
+    if (findByPerson) {
+      return findByPerson; // Esto es PersonDocument
+    }
+
+    // Si no se encontró, devolver un objeto Person "vacío"
+    // Esto NO será un PersonDocument (no tendrá métodos de Mongoose)
+    return this.createEmptyPerson() as Person; // Castear a Person
+  }
+
+  async customUpsert(
+    id: string,
+    dataToSave: CreatePersonDto | UpdatePersonDto,
+  ): Promise<PersonDocument> {
+    const item = await this.findByUserId(id);
+
+    if (item) {
+      // Actualizar el item existente
+      Object.assign(item, dataToSave);
+      // Si usas DTOs, asegúrate de que solo los campos permitidos se asignen.
+      // item.set(dataToSave); // Otra forma de actualizar con Mongoose
+
+      return await this.UpdatePersonLogic(item, dataToSave);
+      //return item.save(); // Ejecuta validadores y middleware de save
+    } else {
+      // Crear un nuevo item
+      // Asegúrate de que dataToSave contenga el identifierField y su valor
+      const createData = { ...dataToSave, userId: id };
+      const newItem = new this.personModel(createData as CreatePersonDto);
+      return newItem.save(); // Ejecuta validadores y middleware de save
+    }
+  }
+
+  private async UpdatePersonLogic(
+    personToUpdate: PersonDocument,
+    updatePersonDto: UpdatePersonDto,
+  ): Promise<PersonDocument> {
     if (
       updatePersonDto.email &&
       updatePersonDto.email !== personToUpdate.email
@@ -232,43 +297,55 @@ export class PersonsService {
           `El email "${updatePersonDto.email}" ya está en uso por otra persona.`,
         );
       }
-    }
 
-    // `associatedAcademyId` ya no se maneja aquí.
-    // Si el DTO lo trae, se ignora o se usa para crear/actualizar una membresía separadamente.
-    const { associatedAcademyId, ...personDataToUpdate } = updatePersonDto;
-    if (associatedAcademyId) {
-      console.warn(
-        `UpdatePersonDto contenía associatedAcademyId (${associatedAcademyId}). Las asociaciones se gestionan separadamente.`,
-      );
-      // Si se quisiera actualizar/añadir una membresía aquí, se llamaría a pamService.
-      // Ejemplo: await this.pamService.associatePersonWithAcademy(...) o this.pamService.updateAssociation(...)
-      // Esto requeriría más lógica y permisos.
-    }
-
-    Object.assign(personToUpdate, personDataToUpdate);
-
-    if (updatePersonDto.userId === null) {
-      personToUpdate.userId = null;
-    } else if (
-      updatePersonDto.userId &&
-      updatePersonDto.userId !== personToUpdate.userId?.toString()
-    ) {
-      const existingPersonForUser = await this.personModel
-        .findOne({
-          userId: new Types.ObjectId(updatePersonDto.userId),
-          _id: { $ne: personToUpdate._id },
-        })
-        .exec();
-      if (existingPersonForUser) {
-        throw new ConflictException(
-          `El usuario ${updatePersonDto.userId} ya está vinculado a otra persona (ID: ${existingPersonForUser.id}).`,
+      // `associatedAcademyId` ya no se maneja aquí.
+      // Si el DTO lo trae, se ignora o se usa para crear/actualizar una membresía separadamente.
+      const { associatedAcademyId, ...personDataToUpdate } = updatePersonDto;
+      if (associatedAcademyId) {
+        console.warn(
+          `UpdatePersonDto contenía associatedAcademyId (${associatedAcademyId}). Las asociaciones se gestionan separadamente.`,
         );
+        // Si se quisiera actualizar/añadir una membresía aquí, se llamaría a pamService.
+        // Ejemplo: await this.pamService.associatePersonWithAcademy(...) o this.pamService.updateAssociation(...)
+        // Esto requeriría más lógica y permisos.
       }
-      personToUpdate.userId = new Types.ObjectId(updatePersonDto.userId);
+
+      Object.assign(personToUpdate, personDataToUpdate);
+
+      if (updatePersonDto.userId === null) {
+        personToUpdate.userId = null;
+      } else if (
+        updatePersonDto.userId &&
+        updatePersonDto.userId !== personToUpdate.userId?.toString()
+      ) {
+        const existingPersonForUser = await this.personModel
+          .findOne({
+            userId: new Types.ObjectId(updatePersonDto.userId),
+            _id: { $ne: personToUpdate._id },
+          })
+          .exec();
+        if (existingPersonForUser) {
+          throw new ConflictException(
+            `El usuario ${updatePersonDto.userId} ya está vinculado a otra persona (ID: ${existingPersonForUser.id}).`,
+          );
+        }
+        personToUpdate.userId = new Types.ObjectId(updatePersonDto.userId);
+      }
     }
 
     return personToUpdate.save();
+  }
+
+  async update(
+    id: string,
+    updatePersonDto: UpdatePersonDto,
+    requestingAcademyId?: string,
+  ): Promise<PersonDocument> {
+    // Devolver PersonDocument
+    // findOne validará si la persona existe y si el usuario tiene acceso (si requestingAcademyId se pasa)
+    const personToUpdate = await this.findOne(id, requestingAcademyId);
+
+    return await this.UpdatePersonLogic(personToUpdate, updatePersonDto);
   }
 
   async linkToUser(personId: string, userId: string): Promise<PersonDocument> {
