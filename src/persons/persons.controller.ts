@@ -44,14 +44,14 @@ interface AuthenticatedRequestWithAcademy extends Request {
 }
 
 // CAMBIO: La ruta base del controlador ahora incluye el parámetro de la academia
-@ApiTags('Persons (Contacts/Students) per Academy')
+@ApiTags('Persons')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard) // RolesGuard ahora entiende :academyId
-@Controller('academies/:academyId/persons')
+@Controller('persons')
 export class PersonsController {
   constructor(private readonly personsService: PersonsService) {}
 
-  @Post()
+  @Post('academies/:academyId/')
   // RolesGuard verifica si el usuario (ej. DIRECTOR) puede operar en :academyId
   @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR, AcademyRole.ADMIN)
   @ApiOperation({
@@ -82,7 +82,20 @@ export class PersonsController {
     return this.personsService.create(dtoForService, academyId);
   }
 
-  @Get()
+  @Get(':personId')
+  @Roles(SystemRole.ROOT, SystemRole.USER)
+  @ApiTags('Profile')
+  @ApiOperation({
+    summary: 'Obtener perfil de una persona',
+  })
+  async getperson(
+    @Param('personId') personId: string,
+    @Req() req: AuthenticatedRequestWithAcademy,
+  ) {
+    return this.personsService.findByUserIdOrPersonId(personId);
+  }
+
+  @Get('academies/:academyId')
   @Roles(
     SystemRole.ROOT,
     AcademyRole.DIRECTOR,
@@ -109,7 +122,7 @@ export class PersonsController {
     return this.personsService.findAll(queryPersonDto, effectiveAcademyId);
   }
 
-  @Get(':personId')
+  @Get(':personId/academies/:academyId')
   @Roles(
     SystemRole.ROOT,
     AcademyRole.DIRECTOR,
@@ -131,7 +144,7 @@ export class PersonsController {
     return this.personsService.findOne(personId, effectiveAcademyId);
   }
 
-  @Patch(':personId')
+  @Patch(':personId/academies/:academyId/')
   @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR, AcademyRole.ADMIN)
   @ApiOperation({
     summary: 'Actualizar una persona existente en la academia especificada',
@@ -150,6 +163,19 @@ export class PersonsController {
       updatePersonDto,
       effectiveAcademyId,
     );
+  }
+
+  @Patch('me/profile')
+  @ApiTags('Profile')
+  @Roles(SystemRole.ROOT, SystemRole.USER)
+  @ApiOperation({
+    summary: 'Actualizar una persona (mi perfil)',
+  })
+  async customUpsert(
+    @Req() req: AuthenticatedRequestWithAcademy,
+    @Body() updatePersonDto: UpdatePersonDto,
+  ) {
+    return this.personsService.customUpsert(req.user.userId, updatePersonDto);
   }
 
   @Delete(':personId')
@@ -171,7 +197,7 @@ export class PersonsController {
   // Por lo tanto, se moverían a un controlador '/persons/admin-ops/' o similar sin :academyId.
   // O si es vincular una persona DE ESTA academia a un usuario:
   @Post(':personId/link-user/:userId')
-  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR) // Director puede vincular personas de SU academia
+  @Roles(SystemRole.USER) // Director puede vincular personas de SU academia
   @ApiOperation({
     summary: 'Vincular una persona (de esta academia) a una cuenta de usuario',
   })
@@ -186,7 +212,7 @@ export class PersonsController {
   }
 
   @Post(':personId/unlink-user')
-  @Roles(SystemRole.ROOT, AcademyRole.DIRECTOR)
+  // @Roles(SystemRole.ROOT)
   @ApiOperation({
     summary:
       'Desvincular una persona (de esta academia) de su cuenta de usuario',
