@@ -23,7 +23,7 @@ export class AcademyUserDto {
     enum: AcademyRole,
     description: 'Rol específico en ESTA academia',
   })
-  roleInThisAcademy: AcademyRole;
+  rolesInThisAcademy: AcademyRole[];
 
   @ApiProperty({ description: 'Estado de la cuenta de usuario global' })
   isUserAccountActive: boolean;

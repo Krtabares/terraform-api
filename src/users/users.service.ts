@@ -21,7 +21,9 @@ import {
   AcademyUserDto,
   PaginatedAcademyUsersDto,
 } from './dto/academy-user.dto';
-import { QueryParamsDto } from 'src/shared/dto/query-params.dto';
+import {
+  QueryParamsDto,
+} from 'src/shared/dto/query-params.dto';
 import { PersonsService } from 'src/persons/persons.service';
 
 @Injectable()
@@ -221,24 +223,12 @@ export class UsersService {
       );
     }
 
-    // Lógica para añadir o actualizar el rol
-    const existingRoleIndex = targetUser.rolesInAcademies.findIndex(
-      (r) => r.academyId.toString() === academyId,
-    );
-
     const newRoleEntry = {
       academyId: new Types.ObjectId(academyId),
       role: roleToAssign,
     };
 
-    if (existingRoleIndex > -1) {
-      // Si ya tiene un rol en esa academia, lo actualizamos
-      // Podrías querer permitir múltiples roles en la misma academia si tu modelo lo soporta,
-      // pero el ejemplo actual asume un rol por academia por usuario.
-      targetUser.rolesInAcademies[existingRoleIndex] = newRoleEntry;
-    } else {
-      targetUser.rolesInAcademies.push(newRoleEntry);
-    }
+    targetUser.rolesInAcademies.push(newRoleEntry);
 
     // Marcar el array como modificado para asegurar que Mongoose lo guarde
     targetUser.markModified('rolesInAcademies');
@@ -248,6 +238,7 @@ export class UsersService {
     const { passwordHash, __v, ...result } = targetUser.toObject();
     return result as UserDocument;
   }
+
 
   async findUsersAssociatedWithAcademy(
     academyId: string,
@@ -296,9 +287,9 @@ export class UsersService {
       }
     }
 
-    const users = await this.userModel
+    const users:any = await this.userModel
       .find(userQuery)
-      .select('_id email name systemRoles isActive rolesInAcademies personId') // Incluir personId
+      .select('_id email name systemRoles isActive rolesInAcademies personId')
       .sort(sortOptions)
       .skip(skip)
       .limit(limit)
@@ -310,46 +301,75 @@ export class UsersService {
       return { data: [], count: 0, totalPages: 0, currentPage: page };
     }
 
-    // Opcional: Enriquecer con datos de Person si es necesario para el DTO
     const personIdsToFetch = users
-      .map((u: any) => u.personId)
+      .map((u) => u.personId)
       .filter((pid) => pid) as Types.ObjectId[];
-    const personsMap = new Map<string, any>(); // Usar 'any' o un tipo Person resumido
+    let personsMap = new Map<string, any>();
 
     if (personIdsToFetch.length > 0) {
       const persons = await this.personsService.personModel
         .find({ _id: { $in: personIdsToFetch } })
-        .select('firstName lastName') // Solo los campos que necesitas
+        .select('firstName lastName')
         .exec();
       persons.forEach((p) => personsMap.set(p._id.toString(), p));
     }
 
-    // Mapear al DTO de respuesta, incluyendo el rol específico de esta academia
-    const academyUsersDto: AcademyUserDto[] = users.map(
-      (user: any): AcademyUserDto => {
-        const personDetails = user.personId
-          ? personsMap.get(user.personId?.toString())
-          : null;
-        const roleInThisAcademyEntry = user?.rolesInAcademies?.find(
-          (roleInAcademy: any) =>
-            roleInAcademy.academyId.toString() === academyId, // Comparar como string por seguridad
-        );
+    const academyUsersDto: AcademyUserDto[] = users.map((user) => {
+      const personDetails = user.personId
+        ? personsMap.get(user.personId.toString())
+        : null;
 
-        return {
-          userId: user?._id?.toString(),
-          personId: user?.personId?.toString() || '',
-          email: user?.email,
-          name: personDetails
-            ? `${personDetails.firstName} ${personDetails.lastName}`
-            : user?.name || user?.email, // Fallback si no hay persona o nombre en user
-          systemRoles: user?.systemRoles,
-          roleInThisAcademy: roleInThisAcademyEntry?.role || AcademyRole.ALUMNO, // Rol en ESTA academia. Fallback a STUDENT o un rol por defecto.
-          isUserAccountActive: user.isActive ?? false,
-          personFirstName: personDetails?.firstName,
-          personLastName: personDetails?.lastName,
-        };
-      },
-    );
+      // Obtener TODOS los roles del usuario en ESTA academia específica
+      const rolesInThisAcademyEntries = user.rolesInAcademies?.filter(
+        (
+          roleInAcademy, // No necesitas el tipo 'any' aquí si User.rolesInAcademies está bien tipado
+        ) => roleInAcademy.academyId.toString() === academyId.toString(), // Comparar como string
+      );
+
+      console.log('rolesInThisAcademyEntries', rolesInThisAcademyEntries);
+
+      // Decidir cómo representar los múltiples roles.
+      // Opción 1: Un string separado por comas.
+      // Opción 2: Un array de roles (modifica AcademyUserDto).
+      // Opción 3: El rol "más importante" (necesitarías una lógica de jerarquía).
+      // Por ahora, usaremos un string separado por comas o el primer rol si solo hay uno.
+      let displayRoleInThisAcademy: AcademyRole | string = 'N/A';
+      if (rolesInThisAcademyEntries && rolesInThisAcademyEntries.length > 0) {
+        if (rolesInThisAcademyEntries.length === 1) {
+          displayRoleInThisAcademy = rolesInThisAcademyEntries[0].role;
+        } else {
+          // Mapear a los nombres de los roles y unirlos
+          displayRoleInThisAcademy = rolesInThisAcademyEntries
+            .map((r) => r.role)
+            .join(', ');
+        }
+      } else if (queryParams.role) {
+        // Si se filtró por un rol específico y no se encontró explícitamente para este usuario,
+        // pero el usuario SÍ apareció en los resultados (porque tiene *otro* rol en la academia
+        // y el filtro de roles se aplicó en la query general), esto puede ser un poco inconsistente.
+        // La query `userQuery['rolesInAcademies.role'] = queryParams.role;` ya asegura que el usuario
+        // tiene ESE rol en la academia. Así que `rolesInThisAcademyEntries` debería contenerlo.
+        // Si aún así quieres un fallback si la lógica de arriba falla:
+        // displayRoleInThisAcademy = queryParams.role as AcademyRole;
+      }
+
+      return {
+        userId: user._id.toString(),
+        personId: user.personId?.toString() || '',
+        email: user.email,
+        name: personDetails
+          ? `${personDetails.firstName} ${personDetails.lastName}`
+          : user.name || user.email,
+        systemRoles: user.systemRoles,
+        // Modificar el DTO si quieres enviar un array de roles
+        roleInThisAcademy: displayRoleInThisAcademy as AcademyRole, // Castear si displayRoleInThisAcademy es solo AcademyRole
+        // Si quieres un array de roles en el DTO:
+        // rolesInThisAcademyArray: rolesInThisAcademyEntries ? rolesInThisAcademyEntries.map(r => r.role) : [],
+        isUserAccountActive: user.isActive ?? false,
+        personFirstName: personDetails?.firstName,
+        personLastName: personDetails?.lastName,
+      };
+    });
 
     return {
       data: academyUsersDto,

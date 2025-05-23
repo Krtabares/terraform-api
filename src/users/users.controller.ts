@@ -107,7 +107,8 @@ export class UsersController {
     );
   }
 
-  @Get(':academyId/users') // O /staff
+  @Get('/academies/:academyId') // O /staff
+  @ApiTags('Users', 'Academies')
   @UseGuards(JwtAuthGuard, RolesGuard)
   // Un ROOT puede ver los usuarios de cualquier academia.
   // Un DIRECTOR solo puede ver los usuarios de SU academia (RolesGuard debe validar esto).
