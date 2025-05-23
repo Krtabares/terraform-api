@@ -12,11 +12,14 @@ import { UsersService } from '../users/users.service'; // Necesitarás un servic
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { MailModule } from 'src/mail/mail.module';
+import { UsersModule } from 'src/users/users.module';
+import { forwardRef } from '@nestjs/common';
+import { PersonsModule } from 'src/persons/persons.module';
 
 @Module({
   imports: [
     ConfigModule, // Asegúrate que ConfigModule esté importado globalmente o aquí
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    // MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -29,6 +32,9 @@ import { MailModule } from 'src/mail/mail.module';
       }),
     }),
     MailModule,
+    UsersModule,
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    forwardRef(() => PersonsModule), 
   ],
   controllers: [AuthController],
   providers: [

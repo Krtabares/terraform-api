@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -20,7 +21,7 @@ import { MailService } from '../mail/mail.service';
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
+    @Inject(UsersService) private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
   ) {}

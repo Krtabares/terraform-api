@@ -24,7 +24,7 @@ export class PersonsService {
   // Las quito para evitar confusión.
 
   constructor(
-    @InjectModel(Person.name) private personModel: Model<PersonDocument>,
+    @InjectModel(Person.name) public personModel: Model<PersonDocument>,
     private readonly pamService: PersonAcademyMembershipsService,
   ) {}
 

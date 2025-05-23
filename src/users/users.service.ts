@@ -1,20 +1,35 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 // src/users/users.service.ts
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Inject } from '@nestjs/common';
+import { FilterQuery, Model, SortOrder, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AcademyRole } from 'src/auth/enum/academyRole.enum';
 import { SystemRole } from 'src/auth/enum/systemRole.enum';
+import { PersonAcademyMembershipsService } from 'src/person-academy-memberships/person-academy-memberships.service';
+import {
+  AcademyUserDto,
+  PaginatedAcademyUsersDto,
+} from './dto/academy-user.dto';
+import { QueryParamsDto } from 'src/shared/dto/query-params.dto';
+import { PersonsService } from 'src/persons/persons.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @Inject(PersonsService) private readonly personsService: PersonsService,
+  ) {}
 
   async findByEmail(email: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ email: email.toLowerCase() });
@@ -232,5 +247,115 @@ export class UsersService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, __v, ...result } = targetUser.toObject();
     return result as UserDocument;
+  }
+
+  async findUsersAssociatedWithAcademy(
+    academyId: string,
+    queryParams: QueryParamsDto,
+  ): Promise<PaginatedAcademyUsersDto> {
+    if (!Types.ObjectId.isValid(academyId)) {
+      // Lanzar NotFound o BadRequest según prefieras para un ID de academia inválido
+      throw new BadRequestException('ID de academia inválido.');
+    }
+    const academyObjectId = new Types.ObjectId(academyId);
+
+    const limit = queryParams.limit || 10;
+    const page = queryParams.page || 1;
+    const skip = (page - 1) * limit;
+
+    // Construir el query para el modelo User
+    const userQuery: FilterQuery<UserDocument> = {
+      // Filtrar usuarios que tengan una entrada en rolesInAcademies
+      // que coincida con la academyId proporcionada.
+      'rolesInAcademies.academyId': academyObjectId,
+    };
+
+    // Si se especifica un rol en los queryParams, añadirlo al filtro de rolesInAcademies
+    if (queryParams.role) {
+      userQuery['rolesInAcademies.role'] = queryParams.role;
+    }
+
+    // Aplicar búsqueda si existe (buscará en campos de User como email, name)
+    // Si quieres que busque en campos de Person (firstName, lastName), la lógica es más compleja.
+    // Por ahora, asumimos que la búsqueda es sobre campos del User.
+    if (queryParams.search) {
+      const searchRegex = new RegExp(queryParams.search, 'i');
+      userQuery.$or = [
+        { email: searchRegex },
+        // Si tu modelo User tiene un campo 'name' directamente:
+        // { name: searchRegex },
+        // Para buscar en Person.firstName/lastName, necesitarías otro enfoque (ver nota abajo)
+      ];
+    }
+
+    let sortOptions: { [key: string]: SortOrder } = { email: 1 }; // Ordenar por email por defecto
+    if (queryParams.sortBy) {
+      const [field, order] = queryParams.sortBy.split(':');
+      if (field && (order === 'asc' || order === 'desc')) {
+        sortOptions = { [field]: order === 'asc' ? 1 : -1 };
+      }
+    }
+
+    const users = await this.userModel
+      .find(userQuery)
+      .select('_id email name systemRoles isActive rolesInAcademies personId') // Incluir personId
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    const totalUsersInAcademy = await this.userModel.countDocuments(userQuery);
+
+    if (!users || users.length === 0) {
+      return { data: [], count: 0, totalPages: 0, currentPage: page };
+    }
+
+    // Opcional: Enriquecer con datos de Person si es necesario para el DTO
+    const personIdsToFetch = users
+      .map((u: any) => u.personId)
+      .filter((pid) => pid) as Types.ObjectId[];
+    const personsMap = new Map<string, any>(); // Usar 'any' o un tipo Person resumido
+
+    if (personIdsToFetch.length > 0) {
+      const persons = await this.personsService.personModel
+        .find({ _id: { $in: personIdsToFetch } })
+        .select('firstName lastName') // Solo los campos que necesitas
+        .exec();
+      persons.forEach((p) => personsMap.set(p._id.toString(), p));
+    }
+
+    // Mapear al DTO de respuesta, incluyendo el rol específico de esta academia
+    const academyUsersDto: AcademyUserDto[] = users.map(
+      (user: any): AcademyUserDto => {
+        const personDetails = user.personId
+          ? personsMap.get(user.personId?.toString())
+          : null;
+        const roleInThisAcademyEntry = user?.rolesInAcademies?.find(
+          (roleInAcademy: any) =>
+            roleInAcademy.academyId.toString() === academyId, // Comparar como string por seguridad
+        );
+
+        return {
+          userId: user?._id?.toString(),
+          personId: user?.personId?.toString() || '',
+          email: user?.email,
+          name: personDetails
+            ? `${personDetails.firstName} ${personDetails.lastName}`
+            : user?.name || user?.email, // Fallback si no hay persona o nombre en user
+          systemRoles: user?.systemRoles,
+          roleInThisAcademy: roleInThisAcademyEntry?.role || AcademyRole.ALUMNO, // Rol en ESTA academia. Fallback a STUDENT o un rol por defecto.
+          isUserAccountActive: user.isActive ?? false,
+          personFirstName: personDetails?.firstName,
+          personLastName: personDetails?.lastName,
+        };
+      },
+    );
+
+    return {
+      data: academyUsersDto,
+      count: totalUsersInAcademy,
+      totalPages: Math.ceil(totalUsersInAcademy / limit),
+      currentPage: page,
+    };
   }
 }

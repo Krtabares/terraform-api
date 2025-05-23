@@ -4,11 +4,12 @@ import { AcademiesController } from './academies.controller';
 import { AcademiesService } from './academies.service';
 import { Academy, AcademySchema } from './schemas/academy.schema';
 import { UsersModule } from 'src/users/users.module';
+import { forwardRef } from '@nestjs/common';
 
 @Module({
   imports: [
-    UsersModule,
     MongooseModule.forFeature([{ name: Academy.name, schema: AcademySchema }]),
+    forwardRef(() => UsersModule),
   ],
   controllers: [AcademiesController],
   providers: [AcademiesService],

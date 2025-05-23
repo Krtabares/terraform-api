@@ -37,7 +37,7 @@ export interface UpdateMembershipDto {
 export class PersonAcademyMembershipsService {
   constructor(
     @InjectModel(PersonAcademyMembership.name)
-    private pamModel: Model<PersonAcademyMembershipDocument>,
+    public pamModel: Model<PersonAcademyMembershipDocument>,
     // private readonly academiesService: AcademiesService, // Inyectado para validación
     // private readonly personsService: PersonsService, // Inyectado para validación
   ) {}
